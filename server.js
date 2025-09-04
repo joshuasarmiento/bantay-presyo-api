@@ -7,9 +7,7 @@ const PDFParser = require('pdf-parse');
 const app = express();
 const port = process.env.PORT || 3000;
 
-const allowedOrigins = process.env.ALLOWED_ORIGINS 
-  ? process.env.ALLOWED_ORIGINS.split(',')
-  : ['http://localhost:5173', 'https://bantaypresyo.vercel.app'];
+const allowedOrigins = process.env.ALLOWED_ORIGINS;
 
 app.use(cors({
   origin: allowedOrigins,
