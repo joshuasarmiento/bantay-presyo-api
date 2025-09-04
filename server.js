@@ -7,22 +7,25 @@ const PDFParser = require('pdf-parse');
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Configure CORS
-// const allowedOrigins = process.env.ALLOWED_ORIGINS 
-//   ? process.env.ALLOWED_ORIGINS.split(',')
-//   : ['http://localhost:5173', 'https://bantay-presyo.vercel.app'];
+const allowedOrigins = process.env.ALLOWED_ORIGINS 
+  ? process.env.ALLOWED_ORIGINS.split(',')
+  : ['http://localhost:5173', 'https://bantaypresyo.vercel.app'];
 
 app.use(cors({
-  origin: '*',
+  origin: allowedOrigins,
   credentials: true
 }));
-
 app.use(express.json());
 
 // Helper function to clean date string
-function cleanDate(dateStr) {
-  return dateStr.replace(/[,\s]+/g, ' ').trim();
-}
+const cleanDate = (input) => {
+  const date = new Date(input);
+  if (isNaN(date)) return null;
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`; // e.g., "2025-09-02"
+};
 
 // Get category mapping
 function getCategoryMapping() {
@@ -57,7 +60,6 @@ function parseTextLine(line, currentCategory) {
   let commodity = '';
   let specification = '';
   
-  // Look for price patterns at the end
   const pricePatterns = [
     /(\d+\.\d+)$/,  // decimal number at end
     /(n\/a)$/i,     // n/a at end (case insensitive)
@@ -116,7 +118,6 @@ async function getDailyPdfLinks() {
     const dom = new JSDOM(response.data);
     const document = dom.window.document;
     
-    // Find the Daily Price Index section
     let sectionHeader = null;
     const h3Elements = document.querySelectorAll('h3');
     
@@ -131,7 +132,6 @@ async function getDailyPdfLinks() {
       return [];
     }
     
-    // Find the next table after the header
     let table = sectionHeader.nextElementSibling;
     while (table && table.tagName !== 'TABLE') {
       table = table.nextElementSibling;
@@ -152,7 +152,8 @@ async function getDailyPdfLinks() {
         const aTag = firstCol.querySelector('a');
         
         if (aTag && aTag.href.endsWith('.pdf')) {
-          const date = cleanDate(aTag.textContent.trim());
+          const dateText = aTag.textContent.trim();
+          const date = cleanDate(dateText);
           const fileSize = secondCol.textContent.trim();
           let pdfUrl = aTag.href;
           
@@ -161,7 +162,7 @@ async function getDailyPdfLinks() {
           }
           
           links.push({
-            date,
+            date: date || dateText, // Fallback to raw text if parsing fails
             file_size: fileSize,
             url: pdfUrl
           });
@@ -195,7 +196,6 @@ async function extractPdfData(pdfUrl) {
     let currentCategory = null;
     const categoryMapping = getCategoryMapping();
     
-    // Parse PDF
     const pdfData = await PDFParser(Buffer.from(response.data));
     const text = pdfData.text;
     
@@ -209,13 +209,11 @@ async function extractPdfData(pdfUrl) {
       const trimmedLine = line.trim();
       if (!trimmedLine) continue;
       
-      // Check for category letters (single letter A-J)
       if (trimmedLine.length === 1 && categoryMapping[trimmedLine.toUpperCase()]) {
         currentCategory = categoryMapping[trimmedLine.toUpperCase()];
         continue;
       }
       
-      // Check for category descriptions
       for (const [letter, desc] of Object.entries(categoryMapping)) {
         if (trimmedLine.toUpperCase().includes(desc)) {
           currentCategory = desc;
@@ -223,14 +221,12 @@ async function extractPdfData(pdfUrl) {
         }
       }
       
-      // Try to parse as commodity data
       const { data: parsedData, success } = parseTextLine(trimmedLine, currentCategory);
       if (success && parsedData) {
         data.push(parsedData);
       }
     }
     
-    // Sort by number
     data.sort((a, b) => {
       const numA = parseInt(a.number);
       const numB = parseInt(b.number);
@@ -266,7 +262,16 @@ app.get('/data', async (req, res) => {
       return res.status(400).json({ error: 'Missing "date" query parameter' });
     }
     
+    // Validate MMMM D, YYYY format (e.g., "September 2, 2025")
+    if (!/^[A-Za-z]+ \d{1,2}, \d{4}$/.test(dateQuery)) {
+      return res.status(400).json({ error: 'Invalid date format. Use MMMM D, YYYY (e.g., September 2, 2025)' });
+    }
+    
     const cleanQuery = cleanDate(dateQuery);
+    if (!cleanQuery) {
+      return res.status(400).json({ error: `Invalid date: ${dateQuery}` });
+    }
+    
     const links = await getDailyPdfLinks();
     
     let pdfUrl = null;
@@ -292,26 +297,23 @@ app.get('/data', async (req, res) => {
       data
     });
   } catch (error) {
+    console.error('Server error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-// Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
-// Error handling middleware
 app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-// 404 handler
 app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
-// Start server
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
 });
