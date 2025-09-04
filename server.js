@@ -55,16 +55,6 @@ const authenticateApiKey = (req, res, next) => {
   next();
 };
 
-app.use((req, res, next) => {
-  if (process.env.NODE_ENV === 'production' && !req.secure) {
-    return res.redirect(`https://${req.headers.host}${req.url}`);
-  }
-  if (process.env.NODE_ENV !== 'production' && !req.secure) {
-    console.warn('Warning: Running in non-HTTPS mode in development');
-  }
-  next();
-});
-
 app.use(express.json());
 
 // Helper function to clean date string
