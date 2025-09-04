@@ -13,7 +13,7 @@ const port = process.env.PORT || 3000;
 // const allowedOrigins = process.env.ALLOWED_ORIGINS || 'http://localhost:5173';
 
 // const allowedOrigins = process.env.ALLOWED_ORIGINS|| 'https://bantaypresyo.vercel.app/';
-const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173,https://bantay-presyo.vercel.app').split(',');
+const allowedOrigins = process.env.ALLOWED_ORIGINS || 'https://bantay-presyo.vercel.app';
 const apiKey = process.env.API_KEY || 'vldqKFnIG2IHawV8lPsOjEgoG6zmkEay7u7f2IUr5pGQL9bO63PkU0iCVZPwRQ4atO1sX86Yt2LYqwjFjQKD8Ek835apFjgjWGY4mrkhA0CB0Xbwm1YOWi86KKbLc5nK'; 
 
 app.use(helmet({
