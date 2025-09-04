@@ -9,7 +9,7 @@ const port = process.env.PORT || 3000;
 
 // const allowedOrigins = process.env.ALLOWED_ORIGINS || 'http://localhost:5173';
 
-const allowedOrigins = process.env.ALLOWED_ORIGINS|| 'https://bantaypresyo.vercel.app';
+const allowedOrigins = process.env.ALLOWED_ORIGINS|| 'https://bantaypresyo.vercel.app/';
 
 // app.use(cors({
 //   origin: allowedOrigins,
@@ -74,9 +74,9 @@ function parseTextLine(line, currentCategory) {
   let specification = '';
   
   const pricePatterns = [
-    /(\d+\.\d+)$/,  // decimal number at end
-    /(n\/a)$/i,     // n/a at end (case insensitive)
-    /(\d+)$/        // whole number at end
+    /(\d+\.\d{1,2})$/, // decimal number (e.g., 56.61, 45.9)
+    /(n\/a)$/i,        // n/a (case insensitive)
+    /(\d+)$/,          // whole number (e.g., 300)
   ];
   
   for (const pattern of pricePatterns) {
@@ -89,29 +89,27 @@ function parseTextLine(line, currentCategory) {
         const words = beforePrice.split(/\s+/);
         if (words.length >= 1) {
           commodity = words[0];
-          if (words.length > 1) {
-            specification = words.slice(1).join(' ');
-          }
+          specification = words.length > 1 ? words.slice(1).join(' ') : '';
         }
       }
       break;
     }
   }
   
-  if (commodity) {
-    return {
-      data: {
-        number,
-        commodity,
-        specification,
-        price,
-        category: currentCategory || 'UNKNOWN'
-      },
-      success: true
-    };
+  if (!commodity) {
+    return { data: null, success: false };
   }
   
-  return { data: null, success: false };
+  return {
+    data: {
+      number,
+      commodity,
+      specification: specification || 'N/A',
+      price,
+      category: currentCategory || 'UNKNOWN'
+    },
+    success: true
+  };
 }
 
 // Scrape PDF links from the main page
@@ -260,14 +258,23 @@ async function extractPdfData(pdfUrl) {
     }
     
     // Sort data by number
+    // data.sort((a, b) => {
+    //   const numA = parseInt(a.number);
+    //   const numB = parseInt(b.number);
+    //   if (isNaN(numA)) return 1;
+    //   if (isNaN(numB)) return -1;
+    //   return numA - numB;
+    // });
     data.sort((a, b) => {
-      const numA = parseInt(a.number);
-      const numB = parseInt(b.number);
-      if (isNaN(numA)) return 1;
-      if (isNaN(numB)) return -1;
+      const numA = parseInt(a.number, 10);
+      const numB = parseInt(b.number, 10);
+      if (isNaN(numA) || isNaN(numB)) {
+        console.error(`Invalid number in sorting: ${numA} or ${numB}`);
+        return 0;
+      }
       return numA - numB;
     });
-    
+
     // Clean up notes: remove duplicates and empty entries
     notes = [...new Set(notes.filter(note => note.trim() && !note.match(/^\d+$/)))];
     
