@@ -3,8 +3,6 @@ const cors = require('cors');
 const axios = require('axios');
 const { JSDOM } = require('jsdom');
 const PDFParser = require('pdf-parse');
-const winston = require('winston');
-require('winston-daily-rotate-file');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -20,32 +18,6 @@ app.use(cors({
 }));
 
 app.use(express.json());
-
-// Set up logging
-const logger = winston.createLogger({
-  level: 'info',
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format.errors({ stack: true }),
-    winston.format.json()
-  ),
-  defaultMeta: { service: 'price-api' },
-  transports: [
-    new winston.transports.DailyRotateFile({
-      filename: 'logs/app-%DATE%.log',
-      datePattern: 'YYYY-MM-DD',
-      zippedArchive: true,
-      maxSize: '20m',
-      maxFiles: '14d'
-    })
-  ]
-});
-
-if (process.env.NODE_ENV !== 'production') {
-  logger.add(new winston.transports.Console({
-    format: winston.format.simple()
-  }));
-}
 
 // Helper function to clean date string
 function cleanDate(dateStr) {
@@ -138,7 +110,6 @@ async function getDailyPdfLinks() {
     const response = await axios.get(url, { headers });
     
     if (response.status !== 200) {
-      logger.error(`Failed to fetch PDF links: Status ${response.status}`);
       return [];
     }
     
@@ -157,7 +128,6 @@ async function getDailyPdfLinks() {
     }
     
     if (!sectionHeader) {
-      logger.warn('Daily Price Index section not found');
       return [];
     }
     
@@ -168,7 +138,6 @@ async function getDailyPdfLinks() {
     }
     
     if (!table) {
-      logger.warn('Table not found after Daily Price Index header');
       return [];
     }
     
@@ -202,7 +171,6 @@ async function getDailyPdfLinks() {
     
     return links;
   } catch (error) {
-    logger.error(`Error fetching PDF links: ${error.message}`);
     return [];
   }
 }
@@ -220,7 +188,6 @@ async function extractPdfData(pdfUrl) {
     });
     
     if (response.status !== 200) {
-      logger.error(`Failed to download PDF: ${pdfUrl}, Status ${response.status}`);
       return [];
     }
     
@@ -233,7 +200,6 @@ async function extractPdfData(pdfUrl) {
     const text = pdfData.text;
     
     if (!text) {
-      logger.warn(`No text extracted from PDF: ${pdfUrl}`);
       return [];
     }
     
@@ -275,7 +241,6 @@ async function extractPdfData(pdfUrl) {
     
     return data;
   } catch (error) {
-    logger.error(`Error parsing PDF: ${pdfUrl}, ${error.message}`);
     return [];
   }
 }
@@ -289,7 +254,6 @@ app.get('/daily_links', async (req, res) => {
     const result = limit ? links.slice(0, limit) : links;
     res.json(result);
   } catch (error) {
-    logger.error(`Error in /daily_links: ${error.message}`);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -328,7 +292,6 @@ app.get('/data', async (req, res) => {
       data
     });
   } catch (error) {
-    logger.error(`Error in /data: ${error.message}`);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -340,7 +303,6 @@ app.get('/health', (req, res) => {
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  logger.error(`Unhandled error: ${err.message}`, err);
   res.status(500).json({ error: 'Internal server error' });
 });
 
@@ -351,6 +313,5 @@ app.use((req, res) => {
 
 // Start server
 app.listen(port, () => {
-  logger.info(`Server running on port ${port}`);
   console.log(`Server running on port ${port}`);
 });
