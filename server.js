@@ -12,7 +12,7 @@ const port = process.env.PORT || 3000;
 // Configure CORS
 const allowedOrigins = process.env.ALLOWED_ORIGINS 
   ? process.env.ALLOWED_ORIGINS.split(',')
-  : ['http://localhost:5173', 'http://127.0.0.1:5173'];
+  : ['http://localhost:5173', 'https://bantay-presyo.vercel.app'];
 
 app.use(cors({
   origin: allowedOrigins,
