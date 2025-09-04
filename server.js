@@ -7,12 +7,30 @@ const PDFParser = require('pdf-parse');
 const app = express();
 const port = process.env.PORT || 3000;
 
-const allowedOrigins = process.env.ALLOWED_ORIGINS;
+// const allowedOrigins = process.env.ALLOWED_ORIGINS || 'http://localhost:5173';
 
+const allowedOrigins = process.env.ALLOWED_ORIGINS != 'production' 
+  ? 'http://localhost:5173' 
+  : process.env.ALLOWED_ORIGINS|| 'https://bantaypresyo.vercel.app/';
+
+
+// app.use(cors({
+//   origin: allowedOrigins,
+//   credentials: true
+// }));
 app.use(cors({
-  origin: allowedOrigins,
+  origin: (origin, callback) => {
+    console.log(`Request origin: ${origin}`);
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.error(`CORS blocked for origin: ${origin}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true
 }));
+
 app.use(express.json());
 
 // Helper function to clean date string
@@ -187,18 +205,20 @@ async function extractPdfData(pdfUrl) {
     });
     
     if (response.status !== 200) {
-      return [];
+      return { data: [], notes: [] };
     }
     
     const data = [];
+    let notes = [];
     let currentCategory = null;
+    let inNotesSection = false;
     const categoryMapping = getCategoryMapping();
     
     const pdfData = await PDFParser(Buffer.from(response.data));
     const text = pdfData.text;
     
     if (!text) {
-      return [];
+      return { data: [], notes: [] };
     }
     
     const lines = text.split('\n');
@@ -207,11 +227,27 @@ async function extractPdfData(pdfUrl) {
       const trimmedLine = line.trim();
       if (!trimmedLine) continue;
       
+      // Check for notes section
+      if (trimmedLine.toLowerCase().startsWith('note') || trimmedLine.toLowerCase().startsWith('notes')) {
+        inNotesSection = true;
+        continue;
+      }
+      
+      if (inNotesSection) {
+        // Collect notes, excluding empty lines or redundant headers
+        if (!trimmedLine.match(/^(Page \d+ of \d+|ANNEX|PREVAILING RETAIL|COMMODITY|SPECIFICATION|PRICE PER UNIT)/i)) {
+          notes.push(trimmedLine);
+        }
+        continue;
+      }
+      
+      // Check for category letters (single letter A-J)
       if (trimmedLine.length === 1 && categoryMapping[trimmedLine.toUpperCase()]) {
         currentCategory = categoryMapping[trimmedLine.toUpperCase()];
         continue;
       }
       
+      // Check for category descriptions
       for (const [letter, desc] of Object.entries(categoryMapping)) {
         if (trimmedLine.toUpperCase().includes(desc)) {
           currentCategory = desc;
@@ -219,12 +255,14 @@ async function extractPdfData(pdfUrl) {
         }
       }
       
+      // Try to parse as commodity data
       const { data: parsedData, success } = parseTextLine(trimmedLine, currentCategory);
       if (success && parsedData) {
         data.push(parsedData);
       }
     }
     
+    // Sort data by number
     data.sort((a, b) => {
       const numA = parseInt(a.number);
       const numB = parseInt(b.number);
@@ -233,9 +271,12 @@ async function extractPdfData(pdfUrl) {
       return numA - numB;
     });
     
-    return data;
+    // Clean up notes: remove duplicates and empty entries
+    notes = [...new Set(notes.filter(note => note.trim() && !note.match(/^\d+$/)))];
+    
+    return { data, notes };
   } catch (error) {
-    return [];
+    return { data: [], notes: [] };
   }
 }
 
@@ -287,12 +328,13 @@ app.get('/data', async (req, res) => {
       });
     }
     
-    const data = await extractPdfData(pdfUrl);
+    const { data, notes } = await extractPdfData(pdfUrl);
     
     res.json({
       date: dateQuery,
       pdf_url: pdfUrl,
-      data
+      data,
+      notes
     });
   } catch (error) {
     console.error('Server error:', error);
