@@ -3,18 +3,30 @@ const cors = require('cors');
 const axios = require('axios');
 const { JSDOM } = require('jsdom');
 const PDFParser = require('pdf-parse');
+const rateLimit = require('express-rate-limit');
+const helmet = require('helmet');
+const { query, validationResult } = require('express-validator');
 
 const app = express();
 const port = process.env.PORT || 3000;
 
 // const allowedOrigins = process.env.ALLOWED_ORIGINS || 'http://localhost:5173';
 
-const allowedOrigins = process.env.ALLOWED_ORIGINS|| 'https://bantaypresyo.vercel.app/';
+// const allowedOrigins = process.env.ALLOWED_ORIGINS|| 'https://bantaypresyo.vercel.app/';
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173,https://bantay-presyo.vercel.app').split(',');
+const apiKey = process.env.API_KEY || 'vldqKFnIG2IHawV8lPsOjEgoG6zmkEay7u7f2IUr5pGQL9bO63PkU0iCVZPwRQ4atO1sX86Yt2LYqwjFjQKD8Ek835apFjgjWGY4mrkhA0CB0Xbwm1YOWi86KKbLc5nK'; 
 
-// app.use(cors({
-//   origin: allowedOrigins,
-//   credentials: true
-// }));
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      connectSrc: ["'self'", 'https://www.da.gov.ph', 'http://localhost:3000']
+    }
+  }
+}));
+
 app.use(cors({
   origin: (origin, callback) => {
     console.log(`Request origin: ${origin}`);
@@ -27,6 +39,31 @@ app.use(cors({
   },
   credentials: true
 }));
+
+app.use(rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per window
+  message: 'Too many requests from this IP, please try again later.'
+}));
+
+// API key authentication middleware
+const authenticateApiKey = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || authHeader !== `Bearer ${apiKey}`) {
+    return res.status(401).json({ error: 'Unauthorized: Invalid or missing API key' });
+  }
+  next();
+};
+
+app.use((req, res, next) => {
+  if (process.env.NODE_ENV === 'production' && !req.secure) {
+    return res.redirect(`https://${req.headers.host}${req.url}`);
+  }
+  if (process.env.NODE_ENV !== 'production' && !req.secure) {
+    console.warn('Warning: Running in non-HTTPS mode in development');
+  }
+  next();
+});
 
 app.use(express.json());
 
@@ -285,7 +322,7 @@ async function extractPdfData(pdfUrl) {
 }
 
 // Routes
-app.get('/daily_links', async (req, res) => {
+app.get('/daily_links', authenticateApiKey, async (req, res) => {
   try {
     const links = await getDailyPdfLinks();
     const limit = req.query.limit ? parseInt(req.query.limit) : null;
@@ -297,8 +334,15 @@ app.get('/daily_links', async (req, res) => {
   }
 });
 
-app.get('/data', async (req, res) => {
+app.get('/data', authenticateApiKey, [
+  query('date').matches(/^[A-Za-z]+ \d{1,2}, \d{4}$/).withMessage('Invalid date format. Use MMMM D, YYYY')
+], async (req, res) => {
   try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ error: errors.array()[0].msg });
+    }
+
     const dateQuery = req.query.date;
     
     if (!dateQuery) {
