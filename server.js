@@ -380,6 +380,34 @@ app.get('/data', authenticateApiKey, [
   }
 });
 
+app.get('/proxy', [
+  query('endpoint').isIn(['daily_links', 'data']).withMessage('Invalid endpoint. Use "daily_links" or "data"'),
+  query('date').optional().matches(/^[A-Za-z]+ \d{1,2}, \d{4}$/).withMessage('Invalid date format. Use MMMM D, YYYY'),
+  query('limit').optional().isInt({ min: 1 }).withMessage('Invalid limit parameter')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ error: errors.array()[0].msg });
+    }
+
+    const { endpoint, date, limit } = req.query;
+    const targetUrl = endpoint === 'data' 
+      ? `${req.protocol}://${req.get('host')}/data?date=${encodeURIComponent(date)}`
+      : `${req.protocol}://${req.get('host')}/daily_links${limit ? `?limit=${limit}` : ''}`;
+
+    const response = await axios.get(targetUrl, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      timeout: 30000
+    });
+
+    res.json(response.data);
+  } catch (error) {
+    console.error(`Proxy error: ${error.message}`);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 app.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
