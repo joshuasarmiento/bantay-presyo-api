@@ -9,10 +9,7 @@ const port = process.env.PORT || 3000;
 
 // const allowedOrigins = process.env.ALLOWED_ORIGINS || 'http://localhost:5173';
 
-const allowedOrigins = process.env.ALLOWED_ORIGINS != 'production' 
-  ? 'http://localhost:5173' 
-  : process.env.ALLOWED_ORIGINS|| 'https://bantaypresyo.vercel.app/';
-
+const allowedOrigins = process.env.ALLOWED_ORIGINS|| 'https://bantaypresyo.vercel.app';
 
 // app.use(cors({
 //   origin: allowedOrigins,
