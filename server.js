@@ -11,8 +11,7 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 // const allowedOrigins = process.env.ALLOWED_ORIGINS || 'http://localhost:5173';
-
-// const allowedOrigins = process.env.ALLOWED_ORIGINS|| 'https://bantaypresyo.vercel.app/';
+// const allowedOrigins = process.env.ALLOWED_ORIGINS|| 'https://bantaypresyo.vercel.app';
 const allowedOrigins = process.env.ALLOWED_ORIGINS || 'https://bantaypresyo.vercel.app';
 const apiKey = process.env.API_KEY || 'vldqKFnIG2IHawV8lPsOjEgoG6zmkEay7u7f2IUr5pGQL9bO63PkU0iCVZPwRQ4atO1sX86Yt2LYqwjFjQKD8Ek835apFjgjWGY4mrkhA0CB0Xbwm1YOWi86KKbLc5nK'; 
 
@@ -381,6 +380,7 @@ app.get('/data', authenticateApiKey, [
 });
 
 app.get('/proxy', [
+  authenticateApiKey,
   query('endpoint').isIn(['daily_links', 'data']).withMessage('Invalid endpoint. Use "daily_links" or "data"'),
   query('date').optional().matches(/^[A-Za-z]+ \d{1,2}, \d{4}$/).withMessage('Invalid date format. Use MMMM D, YYYY'),
   query('limit').optional().isInt({ min: 1 }).withMessage('Invalid limit parameter')
